@@ -1,111 +1,75 @@
-# 🎧 Model Card: Music Recommender Simulation
+# Model Card: Music Recommender Simulation
 
-## 1. Model Name  
+## 1. Model Name
 
-Give your model a short, descriptive name.  
-Example: **VibeFinder 1.0**  
-
----
-
-## 2. Intended Use  
-
-Describe what your recommender is designed to do and who it is for. 
-
-Prompts:  
-
-- What kind of recommendations does it generate  
-- What assumptions does it make about the user  
-- Is this for real users or classroom exploration  
+**VibeFinder 1.0** — Content-Based Music Recommender (Classroom Simulation)
 
 ---
 
-## 3. How the Model Works  
+## 2. Intended Use
 
-Explain your scoring approach in simple language.  
-
-Prompts:  
-
-- What features of each song are used (genre, energy, mood, etc.)  
-- What user preferences are considered  
-- How does the model turn those into a score  
-- What changes did you make from the starter logic  
-
-Avoid code here. Pretend you are explaining the idea to a friend who does not program.
+VibeFinder suggests songs from a 20-song catalog based on a user's stated genre, mood, energy, and acoustic preferences. It is built for classroom exploration — not production use — and requires no listening history or training data.
 
 ---
 
-## 4. Data  
+## 3. How the Model Works
 
-Describe the dataset the model uses.  
-
-Prompts:  
-
-- How many songs are in the catalog  
-- What genres or moods are represented  
-- Did you add or remove data  
-- Are there parts of musical taste missing in the dataset  
+Each song is scored against the user profile across six signals: genre match (strongest), mood match, energy proximity, valence proximity, acoustic fit, and vocal fit. The six scores are summed and divided by the maximum possible total to produce a 0–1 ranking score. Songs are sorted highest-first and the top results are returned with a plain-language explanation.
 
 ---
 
-## 5. Strengths  
+## 4. Data
 
-Where does your system seem to work well  
-
-Prompts:  
-
-- User types for which it gives reasonable results  
-- Any patterns you think your scoring captures correctly  
-- Cases where the recommendations matched your intuition  
+The catalog is `data/songs.csv` with **20 songs** across 16 genres and 9 moods. Most genres have only one representative song, so after a genre match the system must rely on energy and valence to differentiate. No lyrics, cultural context, or listening history is included, and many global genres (K-pop, Afrobeats, Bossa Nova) are absent.
 
 ---
 
-## 6. Limitations and Bias 
+## 5. Strengths
 
-Where the system struggles or behaves unfairly. 
-
-Prompts:  
-
-- Features it does not consider  
-- Genres or moods that are underrepresented  
-- Cases where the system overfits to one preference  
-- Ways the scoring might unintentionally favor some users  
+- **Explainable.** Every result includes a plain-language reason tied to specific signals.
+- **Cold-start friendly.** Works immediately for any user who can state a preference — no history needed.
+- **Coherent for clear profiles.** High-Energy Pop, Chill Lofi, and Deep Intense Rock all returned 97% top matches that matched intuition immediately.
 
 ---
 
-## 7. Evaluation  
+## 6. Limitations and Bias
 
-How you checked whether the recommender behaved as expected. 
+**Genre weight dominates.** At 2.0 points, a genre match outweighs a perfect mood + energy combination, which can suppress great songs from adjacent genres. The weight-shift experiment confirmed this: halving genre and doubling energy moved Rooftop Lights (indie pop, better energy fit) above Gym Hero (pop, weaker energy fit).
 
-Prompts:  
+**Binary mood matching is too coarse.** "Chill" and "relaxed" score identically to a complete mismatch — a song tagged "relaxed" earns zero mood points for a "chill" user. Semantically close moods are treated as completely unrelated.
 
-- Which user profiles you tested  
-- What you looked for in the recommendations  
-- What surprised you  
-- Any simple tests or comparisons you ran  
+**Missing genres silently cap confidence.** The K-Pop profile could never earn genre points, capping its best possible score at ~70%. The system returns plausible-looking results with no warning that the user's core preference is unrepresented.
 
-No need for numeric metrics unless you created some.
+**Contradictory preferences produce quiet failures.** A user who wants high energy + acoustic + ambient gets results at only 52% with no indication their preferences conflict.
 
----
-
-## 8. Future Work  
-
-Ideas for how you would improve the model next.  
-
-Prompts:  
-
-- Additional features or preferences  
-- Better ways to explain recommendations  
-- Improving diversity among the top results  
-- Handling more complex user tastes  
+**Acousticness encodes production style bias.** Rewarding acoustic preference systematically buries highly-produced global genres (reggaeton, electronic) even when they match on every other signal.
 
 ---
 
-## 9. Personal Reflection  
+## 7. Evaluation
 
-A few sentences about your experience.  
+| Profile | Top Result | Score | Surprise? |
+|---------|-----------|-------|-----------|
+| High-Energy Pop | Sunrise City | 97% | No |
+| Chill Lofi | Library Rain | 97% | No |
+| Deep Intense Rock | Storm Runner | 97% | No — only 1 rock song exists |
+| Contradictory Energy+Acoustic | Spacewalk Thoughts | 52% | Yes — chill/ambient ranked #1 despite energy mismatch |
+| Missing Genre (K-Pop) | Sunrise City | 70% | Mild — mood/valence carried it |
+| Ultra-Neutral | Velvet Skyline | 45% | Yes — essentially arbitrary within a flat score band |
 
-Prompts:  
+The weight-shift experiment (genre ÷2, energy ×2) showed Rooftop Lights climbing from #3 to #2, confirming that the default config is closer to a "genre filter with an energy tiebreaker" than a true multi-signal ranker.
 
-- What you learned about recommender systems  
-- Something unexpected or interesting you discovered  
-- How this changed the way you think about music recommendation apps  
+---
+
+## 8. Future Work
+
+- **Soft mood/genre matching** — partial credit for semantically close labels ("chill" ≈ "relaxed", "indie pop" ≈ "pop").
+- **Discovery bonus** — small score boost for out-of-genre songs that match well on 2+ continuous features.
+- **Conflict detection** — warn the user when their preferences are internally contradictory before returning results.
+- **Larger catalog** — at least 5–10 songs per genre to make rankings meaningful rather than single-song genre matches.
+
+---
+
+## 9. Personal Reflection
+
+My biggest learning moment was realizing how much work goes into building even a simple model — decisions about what to weight, how to normalize, and what counts as a "match" compound quickly. I used Claude throughout the project, which was a huge help for the mathematics and implementation details, but I made a point of reading and understanding every piece of generated code before moving on. That habit of double-checking mattered: a few times the logic looked right on the surface but didn't behave as expected until I traced through it manually. What surprised me most was how a straightforward weighted formula — no neural networks, no training data — can still produce recommendations that *feel* personalized and intelligent for users with clear preferences. The algorithm is simple, but the output reads like it knows you. If I were to extend this project, I'd try implementing YouTube's two-stage deep neural network approach: a candidate generation network to narrow the catalog, followed by a ranking network that weights signals like watch time — a much more realistic model of how production recommenders actually work.

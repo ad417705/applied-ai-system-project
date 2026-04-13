@@ -427,3 +427,67 @@ def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tup
 
     # sorted() returns a new ranked list; the original catalog is untouched.
     return sorted(scored, key=lambda entry: entry[1], reverse=True)[:k]
+
+
+def _score_song_weighted(song: Song, user: UserProfile, weights: Dict) -> float:
+    """
+    Variant of score_song that accepts custom per-signal weights for experimentation.
+
+    Parameters
+    ----------
+    song    : Song dataclass
+    user    : UserProfile dataclass
+    weights : dict with keys genre_pts, mood_pts, energy_pts, valence_pts,
+              acoustic_pts, instrumental_pts — each value is the max points
+              that signal can contribute (replaces the hard-coded defaults).
+
+    Returns
+    -------
+    float in [0, 1] normalised by the sum of the provided weights.
+    """
+    w_genre  = weights.get("genre_pts",  2.0)
+    w_mood   = weights.get("mood_pts",   1.5)
+    w_energy = weights.get("energy_pts", 1.5)
+    w_val    = weights.get("valence_pts", 1.0)
+    w_ac     = weights.get("acoustic_pts", 1.0)
+    w_inst   = weights.get("instrumental_pts", 0.8)
+
+    genre_pts  = w_genre  if song.genre == user.favorite_genre else 0.0
+    mood_pts   = w_mood   if song.mood  == user.favorite_mood  else 0.0
+    energy_pts = w_energy * _gaussian(song.energy,  user.target_energy)
+    val_pts    = w_val    * _gaussian(song.valence, user.target_valence)
+    ac_pts     = w_ac  * (song.acousticness if user.likes_acoustic else (1.0 - song.acousticness))
+    inst_pts   = w_inst * (song.instrumentalness if user.prefers_instrumental
+                           else (1.0 - song.instrumentalness))
+
+    max_raw = w_genre + w_mood + w_energy + w_val + w_ac + w_inst
+    raw = genre_pts + mood_pts + energy_pts + val_pts + ac_pts + inst_pts
+    return raw / max_raw
+
+
+def recommend_songs_weighted(
+    user_prefs: Dict,
+    songs: List[Dict],
+    k: int = 5,
+    weights: Dict = None,
+) -> List[Tuple[Dict, float, str]]:
+    """
+    Like recommend_songs but accepts an optional weights dict for A/B experiments.
+
+    weights keys: genre_pts, mood_pts, energy_pts, valence_pts,
+                  acoustic_pts, instrumental_pts
+    Omitted keys fall back to the default values.
+    """
+    if weights is None:
+        return recommend_songs(user_prefs, songs, k=k)
+
+    user = _prefs_dict_to_profile(user_prefs)
+    rec  = Recommender([])
+
+    scored = [
+        (song_dict,
+         _score_song_weighted(song_obj := _song_dict_to_obj(song_dict), user, weights),
+         rec.explain_recommendation(user, song_obj))
+        for song_dict in songs
+    ]
+    return sorted(scored, key=lambda entry: entry[1], reverse=True)[:k]
