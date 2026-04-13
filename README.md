@@ -29,7 +29,33 @@ Some prompts to answer:
 
 You can include a simple diagram or bullet list if helpful.
 
----
+- A real world system typically, includes a hybrid of collaborative filtering, content-based filtering. Upon research we see a common use of RNN and transformer models being usedn more. More niche systems like Apple music, use metadata to see what users actually listen to.
+
+### Algorithm Recipe
+
+Each song is scored against the user profile using weighted proximity:
+
+```
+raw_score = genre_pts + mood_pts + energy_pts + acoustic_pts
+
+genre_pts    = 2.0  if song.genre == user.favorite_genre  else 0.0
+mood_pts     = 1.5  if song.mood  == user.favorite_mood   else 0.0
+energy_pts   = 1.5 × exp( −(song.energy − user.target_energy)² / 2(0.25)² )
+acoustic_pts = 1.0 × song.acousticness       if user.likes_acoustic
+             = 1.0 × (1 − song.acousticness) otherwise
+
+score = raw_score / 6.0    → normalized to [0, 1]
+```
+
+Energy uses a **Gaussian proximity kernel** instead of plain `1 − |v − t|` so that small mismatches are forgiven gently while large gaps are penalized steeply. All songs are ranked by `score` descending and the top-k are returned.
+
+### Potential Biases
+
+- **Genre over-weighting:** at +2.0 pts, a genre match outweighs a perfect mood + energy match. A great song in the wrong genre may never surface.
+- **Binary mood matching:** "chill" and "relaxed" are semantically close but both score 0 on a mismatch — every miss is treated as equally wrong.
+- **Catalog skew:** with only 10 songs, some genre/mood combos have zero matches, leaving those users ranked almost entirely on energy alone.
+
+-
 
 ## Getting Started
 
@@ -41,6 +67,8 @@ You can include a simple diagram or bullet list if helpful.
    python -m venv .venv
    source .venv/bin/activate      # Mac or Linux
    .venv\Scripts\activate         # Windows
+
+   ```
 
 2. Install dependencies
 
@@ -101,12 +129,11 @@ Write 1 to 2 paragraphs here about what you learned:
 - about how recommenders turn data into predictions
 - about where bias or unfairness could show up in systems like this
 
-
 ---
 
 ## 7. `model_card_template.md`
 
-Combines reflection and model card framing from the Module 3 guidance. :contentReference[oaicite:2]{index=2}  
+Combines reflection and model card framing from the Module 3 guidance. :contentReference[oaicite:2]{index=2}
 
 ```markdown
 # 🎧 Model Card - Music Recommender Simulation
@@ -158,6 +185,7 @@ Describe your dataset.
 Where does your recommender work well
 
 You can think about:
+
 - Situations where the top results "felt right"
 - Particular user profiles it served well
 - Simplicity or transparency benefits
@@ -169,6 +197,7 @@ You can think about:
 Where does your recommender struggle
 
 Some prompts:
+
 - Does it ignore some genres or moods
 - Does it treat all users as if they have the same taste shape
 - Is it biased toward high energy or one genre by default
@@ -181,6 +210,7 @@ Some prompts:
 How did you check your system
 
 Examples:
+
 - You tried multiple user profiles and wrote down whether the results matched your expectations
 - You compared your simulation to what a real app like Spotify or YouTube tends to recommend
 - You wrote tests for your scoring logic
@@ -208,4 +238,4 @@ A few sentences about what you learned:
 - What surprised you about how your system behaved
 - How did building this change how you think about real music recommenders
 - Where do you think human judgment still matters, even if the model seems "smart"
-
+```
