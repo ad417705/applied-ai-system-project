@@ -167,7 +167,7 @@ def run_experiment(user_prefs: dict, songs: list, k: int = 5) -> None:
         print(f"  #{rank}  {song['title']:30s}  {bar}  {score:.0%}")
 
     # Experimental run
-    print(f"\n  [B] Experimental weights  (genre=1.0, energy=3.0)")
+    print("\n  [B] Experimental weights  (genre=1.0, energy=3.0)")
     print("-" * WIDTH)
     exp_recs = recommend_songs_weighted(user_prefs, songs, k=k, weights=EXPERIMENTAL_WEIGHTS)
     for rank, (song, score, _) in enumerate(exp_recs, start=1):
@@ -183,18 +183,121 @@ def run_experiment(user_prefs: dict, songs: list, k: int = 5) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Interactive mode
+# ---------------------------------------------------------------------------
+
+_VALID_GENRES = ["pop", "lofi", "rock", "ambient", "jazz", "synthwave", "indie pop"]
+_VALID_MOODS  = ["happy", "chill", "intense", "moody", "relaxed", "focused"]
+
+
+def _prompt_float(prompt: str, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    """Ask for a float in [lo, hi]; return default on empty input or bad value."""
+    raw = input(prompt).strip()
+    if not raw:
+        return default
+    try:
+        val = float(raw)
+        if lo <= val <= hi:
+            return val
+        print(f"       Out of range — using default ({default})")
+    except ValueError:
+        print(f"       Not a number — using default ({default})")
+    return default
+
+
+def _prompt_bool(prompt: str, default: bool) -> bool:
+    """Ask a yes/no question; return default on empty input."""
+    raw = input(prompt).strip().lower()
+    if not raw:
+        return default
+    return raw in ("y", "yes", "1", "true")
+
+
+def interactive_mode(songs: list) -> None:
+    """
+    Walk the user through entering their own taste preferences, score the
+    catalog against those preferences, and print ranked recommendations.
+
+    All fields are optional — pressing Enter skips to a sensible default so
+    users can get results quickly without filling in every field.
+    """
+    print()
+    print("=" * WIDTH)
+    print("  Interactive Recommender".center(WIDTH))
+    print("  (press Enter to skip any field and use the default)".center(WIDTH))
+    print("=" * WIDTH)
+
+    # ── Genre ─────────────────────────────────────────────────────────────
+    print(f"\n  Available genres: {', '.join(_VALID_GENRES)}")
+    genre_raw = input("  Your preferred genre [none]: ").strip().lower()
+    genre = genre_raw if genre_raw in _VALID_GENRES else ""
+    if genre_raw and not genre:
+        print(f"       '{genre_raw}' not in catalog — no genre bonus will apply.")
+
+    # ── Mood ──────────────────────────────────────────────────────────────
+    print(f"\n  Available moods: {', '.join(_VALID_MOODS)}")
+    mood_raw = input("  Your preferred mood [none]: ").strip().lower()
+    mood = mood_raw if mood_raw in _VALID_MOODS else ""
+    if mood_raw and not mood:
+        print(f"       '{mood_raw}' not in catalog — no mood bonus will apply.")
+
+    # ── Continuous preferences ────────────────────────────────────────────
+    print()
+    energy  = _prompt_float("  Target energy  (0.0 calm → 1.0 intense) [0.5]: ", 0.5)
+    valence = _prompt_float("  Target valence (0.0 dark  → 1.0 joyful)  [0.5]: ", 0.5)
+
+    # ── Binary preferences ────────────────────────────────────────────────
+    print()
+    likes_acoustic     = _prompt_bool("  Prefer acoustic / organic sound? (y/n) [n]: ", False)
+    prefers_instrumental = _prompt_bool("  Prefer instrumental (no vocals)?  (y/n) [n]: ", False)
+
+    # ── How many results? ─────────────────────────────────────────────────
+    print()
+    k_raw = input("  How many recommendations? [5]: ").strip()
+    try:
+        k = max(1, min(int(k_raw), len(songs))) if k_raw else 5
+    except ValueError:
+        k = 5
+
+    user_prefs = {
+        "genre":                genre,
+        "mood":                 mood,
+        "energy":               energy,
+        "target_valence":       valence,
+        "likes_acoustic":       likes_acoustic,
+        "prefers_instrumental": prefers_instrumental,
+    }
+
+    run_profile("Your Custom Profile", user_prefs, songs, k=k)
+
+    again = input("  Run again with different preferences? (y/n) [n]: ").strip().lower()
+    if again in ("y", "yes"):
+        interactive_mode(songs)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     songs = load_songs("data/songs.csv")
 
-    # Run all profiles
-    for label, prefs in PROFILES.items():
-        run_profile(label, prefs, songs, k=5)
+    print()
+    print("=" * WIDTH)
+    print("  VibeFinder 1.0 — Music Recommender".center(WIDTH))
+    print("=" * WIDTH)
+    print("  1. Run demo profiles")
+    print("  2. Interactive mode — enter your own preferences")
+    print("=" * WIDTH)
 
-    # Run weight-shift experiment on the High-Energy Pop profile
-    run_experiment(PROFILES[HIGH_ENERGY_POP], songs, k=5)
+    choice = input("  Choose an option [1]: ").strip()
+
+    if choice == "2":
+        interactive_mode(songs)
+    else:
+        for label, prefs in PROFILES.items():
+            run_profile(label, prefs, songs, k=5)
+        run_experiment(PROFILES[HIGH_ENERGY_POP], songs, k=5)
 
 
 if __name__ == "__main__":
